@@ -1,14 +1,18 @@
 import cv2 
 import numpy as np
+import time 
+import sys, getopt
 
 
-img = cv2.imread( "button.png" )
-print( img.shape )
-img = img[0:400, 0:800]
+def main( argv ):
+	opts, args = getopt.getopt( argv, "hi:o", ["youtube", "video" ] )
+
+	path = ""
+	for opt, arg in opts:
+		if opt in ("-y","--youtube"):
+			
 
 
 
-
-
-cv2.imshow( "asdgasdg", img)
-cv2.waitKey(0)
+if __name__ == "__main__":
+	main( sys.argv[1:] )

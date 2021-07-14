@@ -1,12 +1,11 @@
-from tkinter.constants import W
 import cv2, time
 import numpy as np
-import pygame
 from threading import Thread
 import os
 from queue import Queue
 
-from torch._C import wait
+from pygame.constants import WINDOWHITTEST
+
 
 # Detection format
 # xmin ymin xmax ymax confidence class
@@ -23,6 +22,8 @@ def same_object( box1, box2, thresh=0.5 ):
 	return fra >= thresh
 
 def detection_filter( detection ):
+	if len( detection ) == 0 : return detection
+
 	hel = []
 	nohel = []
 	biker = []
@@ -58,6 +59,8 @@ def detection_filter( detection ):
 	return [hel[i] for i in hel_av] + [nohel[x] for x in nohel_av] + biker
 
 def draw_boxes( img, detection ):
+	if len( detection ) == 0: return img
+
 	de = [box.astype(int) for box in detection]
 	colors = [(0,0,255), (0,255,0), (255,255,0)]
 	h,w,_ = img.shape
@@ -68,6 +71,7 @@ def draw_boxes( img, detection ):
 	return img
 
 def count_class( detection, target=0 ):
+	if len( detection ) == 0 : return 0
 	count = 0
 	for box in detection :
 		if box[5] == target:
@@ -101,103 +105,41 @@ def detect( img, model, get_count = False  ):
 		return img, count_class( detection )
 
 
-def cv2_img2sur( img ):
-	img = cv2.cvtColor( img, cv2.COLOR_BGR2RGB )
-	img = img.swapaxes( 0,1 )
-	w,h,d = img.shape
-	newSuface = pygame.Surface( (w,h) )
-	pygame.surfarray.blit_array( newSuface, img )
-
-	return newSuface
-
-def resize_surface_withMax( sur, leng ):
-	w,h = sur.get_size()
-	if w>h :
-		h = h*leng // w
-		w = leng
-	else:
-		w = w*leng // h
-		h = leng
-
-	
-	return pygame.transform.scale( sur, (w,h) )
-
-def set_pos( base_size, rect, x="left", y="top" ):
-	wi, hi = base_size
-	if x =="left":
-		rect.x = 0
-	elif x == "center":
-		rect.x = (wi//2) - (rect.w//2) 
-	elif x == "right":
-		rect.x = wi - rect.w
-
-	if y =="top":
-		rect.y = 0
-	elif y == "center":
-		rect.y = (hi//2) - (rect.h//2) 
-	elif y == "bottom":
-		rect.y = hi - rect.h
-
-	return rect
-
 class Camera( object ):
-	def __init__(self, model, source=0,FPS=30, size = 900 , pos=(0,0)):
-		self.cap = cv2.VideoCapture(source)
-		self.FPS = FPS
-		self.size=size
+	def __init__( self, model, source=0, FPS=60, catching = False  ):
+		self.detective = Detective( model, catching )
+		self.cap = cv2.VideoCapture( source ) 
+		self.SPF = 1/FPS
+		self.FPS = 60 
 
-		self.model = model 
-
-		self.x, self.y = pos 
 		_, self.frame = self.cap.read()
 
-		self.detective = Detective( model )
-
-		# run threading
-		self.threading = Thread( target=self.run, args=() )
+		self.threading = Thread( target=self.update, args=() )
 		self.threading.daemon = True 
 		self.threading.start()
 
-	
-	def run( self ):
-		while 1 :
-			if self.cap.isOpened():
-				# take frame from camera
-				ret, self.frame = self.cap.read()
+	def update( self ):
+		while 1:
+			if self.cap.isOpened( ):
+				ret, img = self.cap.read()
+				if ret:
+					self.frame = img 
+				
 				cv2.waitKey( 1000//self.FPS )
-
-	def change_source( self, source ):
-		# self.cap.release()
-		self.cap = cv2.VideoCapture( source )
+				
 	
-	def show( self, base ):
-		## take frame 
+	def read_predicted_frame( self ):
 		img = self.frame.copy()
 
-		## update boxes
 		boxes = self.detective.detect( img )
 
-		## drawing boxes
 		img = draw_boxes( img, boxes )
 
-		# img = detect( self.frame, self.model )
-
-		## convert to pygame Surface for blitting
-		sur = cv2_img2sur( img )
-		sur = resize_surface_withMax( sur, self.size )
-		rect = sur.get_rect()
-		rect.x, rect.y = self.x, self.y
-		wi, hi = base.get_size()
-		rect = set_pos( (wi,hi), rect, "center", "top" )
-		base.blit( sur, rect )
+		return img
 	
-	def switch_catching( self ):
-		self.detective.switch_catching()
 	
-	def quit( self ):
-		self.cap.release()
-		cv2.destroyAllWindows()
-		
+	def read_real_frame( self ):
+		return self.frame
 
 # this Q below containing all catched images
 waitingQ = Queue()
@@ -228,7 +170,7 @@ class Detective( object ):
 	
 	def switch_catching( self ):
 		self.catching = not self.catching
-
+		self.nohel_count_old = 0
 
 ## this below class will decide which images in waitingQ allowed to save
 class Filter( object ):
@@ -279,34 +221,42 @@ class Filter( object ):
 						return True
 			return False
 
+		def get_padding( box, width,height, padding = 10 ):
+			xmin,ymin,xmax,ymax,_,__ = box.astype(int)
+			xmin -= padding
+			ymin -= padding
+			xmax += padding
+			ymax += padding
+
+			if xmin < 0 : xmin = 0
+			if ymin < 0 : ymin = 0
+			if xmax > width : xmax = width
+			if ymax > height : ymax = height
+
+			return xmin,ymin,xmax,ymax,_,__
 
 		## work while waitingQ is not empty
 		while 1:
-			## take (img, boxes) from waitingQ
-			img, boxes = waitingQ.get()
+			# if not waitingQ.empty():
+				## take (img, boxes) from waitingQ
+				img, boxes = waitingQ.get()
+				img_h, img_w, img_d = img.shape
 
-			## check if nohels is inside biker
-			bikers = self.nohels_inside_biker( boxes )
+				## check if nohels is inside biker
+				bikers = self.nohels_inside_biker( boxes )
 
-			## crop bikers have nohelmet
-			#[ymin:ymax, xmin:xmax]
-			biker_imgs = []
-			for biker in bikers:
-				xmin,ymin,xmax,ymax,_,__ = biker.astype(int)
-				cropped = img[ ymin:ymax, xmin:xmax ]
-				biker_imgs.append(cropped)
-			# ## save all of bikers for debug 
-			# for biker_img in biker_imgs:
-			# 	self.save_img( biker_img )
+				## if cropped img still has biker, nohelmet, then save it 
+				for biker in bikers:
+					xmin,ymin,xmax,ymax,_,__ = get_padding( biker, img_w, img_h )
+					biker_img = img[ ymin:ymax, xmin:xmax ]
 
-			## if cropped img still has biker, nohelmet, then save it 
-			for biker_img in biker_imgs:
-				print( "Makesure-checking a nohelmet-biker...")
-				if recheck( biker_img ):
-					self.save_img( biker_img )
-					print( "It is. Saved a nohelmet-biker.")
-				else:
-					print( "It's not.")
+					print( "\nMakesure-checking a nohelmet-biker...")
+					# if recheck( biker_img ):
+					if 1:
+						self.save_img( biker_img )
+						print( "It is. Saved a nohelmet-biker.")
+					else:
+						print( "It's not.")
 
 
 	def inside( self, box1, box2, thresh=0.8 ):
