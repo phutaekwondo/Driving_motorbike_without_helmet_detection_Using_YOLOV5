@@ -38,7 +38,6 @@ def main( argv ):
 
 	model = torch.hub.load( "./yolov5", "custom", model_path, source="local")
 	detective = phu_yolov5.Detective( model, catching=catching )
-	mainFilter = phu_yolov5.Filter( model )
 
 	FPS =  60
 	SPF = 1/FPS

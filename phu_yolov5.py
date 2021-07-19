@@ -145,32 +145,38 @@ class Camera( object ):
 waitingQ = Queue()
 
 class Detective( object ):
-	def __init__( self, model, catching = False ):
+	def __init__( self, model, catching = False, savedir="saved/", filetag="" ):
 		self.model = model
 		self.catching = catching
+
+		self.filter = Filter( model, savedir, filetag )
 		
 		self.nohel_count_old = 0
+		self.biker_nohel_count = 0
 
 	def detect( self, img ):
 		# take img
 
 		# detecting 
-		boxes, nohel_count = get_detection( img, self.model, get_count=True )
+		boxes = get_detection( img, self.model)
 
 		# for catching 
 		if self.catching :
-			if nohel_count > self.nohel_count_old :
+			biker_which_has_nohel = self.filter.nohels_inside_biker( boxes )
+			biker_nohel_count = len( biker_which_has_nohel )
+			if biker_nohel_count > self.biker_nohel_count:
 				## catch
-				waitingQ.put( (img.copy(), boxes) )
+				waitingQ.put( (img.copy(), biker_which_has_nohel) )
 				print( "putted a image into waitin' Q.")
 			## update counting
-			self.nohel_count_old = nohel_count
+			self.biker_nohel_count = biker_nohel_count
 		
 		return boxes ## for camera drawing box 
 	
 	def switch_catching( self ):
 		self.catching = not self.catching
 		self.nohel_count_old = 0
+		self.biker_nohel_count = 0
 
 ## this below class will decide which images in waitingQ allowed to save
 class Filter( object ):
@@ -210,6 +216,7 @@ class Filter( object ):
 			## if don't have nohelmet or biker anymore, then return False
 			for count in [nohel_count, biker_count]:
 				if count == 0:
+					print("it's not because \"nohelmet NOT FOUND\"\n")
 					return False
 			
 			## if there are not a biker fit the img
@@ -219,9 +226,11 @@ class Filter( object ):
 					area = (ymax-ymin)*(xmax-xmin)
 					if (area/whole_area) >= thresh:
 						return True
+			
+			print("it's not because \"biker NOT FOUND\"\n" )
 			return False
 
-		def get_padding( box, width,height, padding = 10 ):
+		def get_padding( box, width,height, padding = 5 ):
 			xmin,ymin,xmax,ymax,_,__ = box.astype(int)
 			xmin -= padding
 			ymin -= padding
@@ -239,20 +248,23 @@ class Filter( object ):
 		while 1:
 			# if not waitingQ.empty():
 				## take (img, boxes) from waitingQ
-				img, boxes = waitingQ.get()
+				img, bikers= waitingQ.get()
 				img_h, img_w, img_d = img.shape
 
 				## check if nohels is inside biker
-				bikers = self.nohels_inside_biker( boxes )
+				## bikers get from waitingQ
+				# bikers = self.nohels_inside_biker( boxes )
 
 				## if cropped img still has biker, nohelmet, then save it 
 				for biker in bikers:
-					xmin,ymin,xmax,ymax,_,__ = get_padding( biker, img_w, img_h )
+					padding = 10
+					xmin,ymin,xmax,ymax,_,__ = get_padding( biker, img_w, img_h, padding=padding )
 					biker_img = img[ ymin:ymax, xmin:xmax ]
 
-					print( "\nMakesure-checking a nohelmet-biker...")
-					# if recheck( biker_img ):
-					if 1:
+					thresh = ( (biker[3]-biker[1])/(ymax - ymin) ) * ( (biker[2]-biker[0])/(xmax-xmin) ) - 0.2
+
+					print( "\nMakesure-checking a nohelmet-biker... ")
+					if recheck( biker_img, thresh=thresh ):
 						self.save_img( biker_img )
 						print( "It is. Saved a nohelmet-biker.")
 					else:
