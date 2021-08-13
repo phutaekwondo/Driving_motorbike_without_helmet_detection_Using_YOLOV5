@@ -167,7 +167,7 @@ class Detective( object ):
 			if biker_nohel_count > self.biker_nohel_count:
 				## catch
 				waitingQ.put( (img.copy(), biker_which_has_nohel) )
-				print( "putted a image into waitin' Q.")
+				# print( "add an image to waitingQ")
 			## update counting
 			self.biker_nohel_count = biker_nohel_count
 		
@@ -181,27 +181,29 @@ class Detective( object ):
 ## this below class will decide which images in waitingQ allowed to save
 class Filter( object ):
 	def __init__( self, model, savedir="saved/", tag="" ):
-		self.model = model
-		self.savedir = savedir
-		if not os.path.isdir( savedir ):
-			os.mkdir( savedir )
-		self.tag = tag
-
-		self.threading = Thread( target=self.run, args=())
-		self.threading.daemon = True
-		self.threading.start()
+                self.model = model
+                self.savedir = savedir
+                if not os.path.isdir( savedir ):
+                	os.mkdir( savedir )
+                self.tag = tag
+                
+                self.threading = Thread( target=self.run, args=())
+                self.threading.daemon = True
+                self.threading.start()
 	
 	def save_img( self, img ):
-		## make a new file's name
-		### the below loop will check if file's name is existed, then make a new name
-		index = 0
-		while os.path.isfile( self.savedir + self.tag + str(index) + ".jpg" ):
-			index += 1
-		filename = self.savedir + self.tag + str(index) + ".jpg"
-
-		## save img by a name 
-		cv2.imwrite( filename, img )
-		print( "saved an img to " + filename )
+                ## make a new file's name
+                ### the below loop will check if file's name is existed, then make a new name
+                index = 0
+                while os.path.isfile( self.savedir + self.tag + str(index) + ".jpg" ):
+                	index += 1
+                filename = self.savedir + self.tag + str(index) + ".jpg"
+                
+                ## save img by a name 
+                cv2.imwrite( filename, img )
+                
+                ## addname to savedNames list
+                print( "saved to " + filename )
 	
 	def run( self ):
 		def recheck( img, thresh = 0.9 ):
@@ -216,7 +218,7 @@ class Filter( object ):
 			## if don't have nohelmet or biker anymore, then return False
 			for count in [nohel_count, biker_count]:
 				if count == 0:
-					print("it's not because \"nohelmet NOT FOUND\"\n")
+					# print("it's not because \"nohelmet NOT FOUND\"\n")
 					return False
 			
 			## if there are not a biker fit the img
@@ -227,7 +229,7 @@ class Filter( object ):
 					if (area/whole_area) >= thresh:
 						return True
 			
-			print("it's not because \"biker NOT FOUND\"\n" )
+			# print("it's not because \"biker NOT FOUND\"\n" )
 			return False
 
 		def get_padding( box, width,height, padding = 5 ):
@@ -263,12 +265,12 @@ class Filter( object ):
 
 					thresh = ( (biker[3]-biker[1])/(ymax - ymin) ) * ( (biker[2]-biker[0])/(xmax-xmin) ) - 0.2
 
-					print( "\nMakesure-checking a nohelmet-biker... ")
+					# print( "\nMakesure-checking a nohelmet-biker... ")
 					if recheck( biker_img, thresh=thresh ):
 						self.save_img( biker_img )
-						print( "It is. Saved a nohelmet-biker.")
-					else:
-						print( "It's not.")
+						# print( "It is. Saved a nohelmet-biker.")
+					# else:
+					# 	print( "It's not.")
 
 
 	def inside( self, box1, box2, thresh=0.8 ):
