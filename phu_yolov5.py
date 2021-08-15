@@ -4,7 +4,6 @@ from threading import Thread
 import os
 from queue import Queue
 
-from pygame.constants import WINDOWHITTEST
 
 
 # Detection format
