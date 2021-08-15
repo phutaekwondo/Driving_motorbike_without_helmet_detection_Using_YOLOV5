@@ -1,5 +1,5 @@
 # Driving motorbike without helmet detection Using YOLOV5
-## Instrallation
+## Installation
 
 If your machine can run Yolov5 already, then skip this step.
 
