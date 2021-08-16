@@ -1,10 +1,13 @@
 # Driving motorbike without helmet detection Using YOLOV5
 ## Installation
+Install below packages to run on Youtube video by URL.
+
+    !pip install pafy youtube-dl
 
 If your machine can run Yolov5 already, then skip this step.
 
     !pip install -r yolov5/requirement.txt
-    !pip install pafy youtube-dl
+
    
  ## Run
  
